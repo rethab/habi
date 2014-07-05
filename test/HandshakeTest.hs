@@ -14,11 +14,12 @@ import TestUtil
 
 import Handshake
                       
-tests = [ testProperty "return_fingerprint_from_peer" return_fingerprint_from_peer
+tests = [ testProperty "leecher_hello" leecher_hello
+        , testProperty "seeder_hello" seeder_hello
         --, testCase "decrypt_garbage" decrypt_garbage
         ]
 
-return_fingerprint_from_peer sFpr = BS.length sFpr `between` (1,100) ==>
+leecher_hello sFpr = BS.length sFpr `between` (1,100) ==>
     let (ret, (MockState _ w)) = runState fprExchg (newMock sPayload)
     in ret == sFpr && w == lPayload
 
@@ -28,6 +29,23 @@ return_fingerprint_from_peer sFpr = BS.length sFpr `between` (1,100) ==>
 
               lFpr = BS.pack [1,2,3,4,5]
               lPayload = toPayload 'L' lFpr
+
+              toPayload :: Char -> BS.ByteString -> BS.ByteString
+              toPayload i f = BS.pack [ fromIntegral $ ord i
+                                      , 0
+                                      , fromIntegral $ BS.length f ]
+                              `BS.append` f
+
+seeder_hello lFpr = BS.length lFpr `between` (1,100) ==>
+    let (ret, (MockState _ w)) = runState fprExchg (newMock lPayload)
+    in ret == lFpr && w == sPayload
+
+        where fprExchg = seederHello (Ctx sFpr) undefined
+
+              lPayload = toPayload 'L' lFpr
+
+              sFpr = BS.pack [1,2,3,4,5]
+              sPayload = toPayload 'S' sFpr
 
               toPayload :: Char -> BS.ByteString -> BS.ByteString
               toPayload i f = BS.pack [ fromIntegral $ ord i

@@ -27,7 +27,6 @@ instance HandleMonad IO where
     hmPut  = BS.hPut
     hmGet  = BS.hGet
 
--- Leecher: Sends fingerprint to seeder
 leecherHello :: (HandleMonad hm) => Ctx -> Handle -> hm Fpr
 leecherHello ctx h = do
     
@@ -43,4 +42,20 @@ leecherHello ctx h = do
   where lFprLen = putWord16be (fromIntegral $ BS.length (fpr ctx))
         lPacketID = putWord8 (fromIntegral $ ord 'L')
 
-leecherSesskey = undefined
+seederHello :: (HandleMonad hm) => Ctx -> Handle -> hm Fpr
+seederHello ctx h = do
+    
+    -- receive fingerprint
+    lPacketID <- (runGet getWord8 . LBS.fromStrict) `liftM` hmGet h 1
+    lFprLen <- (runGet getWord16be . LBS.fromStrict) `liftM` hmGet h 2
+    lFpr <- hmGet h (fromIntegral lFprLen)
+
+    -- send fingerprint
+    hmPut h (LBS.toStrict . runPut $ sPacketID >> sFprLen)
+    hmPut h (fpr ctx)
+
+    return lFpr
+
+
+  where sFprLen = putWord16be (fromIntegral $ BS.length (fpr ctx))
+        sPacketID = putWord8 (fromIntegral $ ord 'S')
