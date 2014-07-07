@@ -16,6 +16,7 @@ import Handshake
                       
 tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_hello" seeder_hello
+        , testProperty "leecher_session_key" leecher_session_key
         --, testCase "decrypt_garbage" decrypt_garbage
         ]
 
@@ -23,7 +24,7 @@ leecher_hello sFpr = BS.length sFpr `between` (1,100) ==>
     let (ret, (MockState _ w)) = runState fprExchg (newMock sPayload)
     in ret == sFpr && w == lPayload
 
-        where fprExchg = leecherHello (Ctx lFpr) undefined
+        where fprExchg = leecherHello lFpr undefined
 
               sPayload = toPayload 'S' sFpr
 
@@ -40,7 +41,7 @@ seeder_hello lFpr = BS.length lFpr `between` (1,100) ==>
     let (ret, (MockState _ w)) = runState fprExchg (newMock lPayload)
     in ret == lFpr && w == sPayload
 
-        where fprExchg = seederHello (Ctx sFpr) undefined
+        where fprExchg = seederHello sFpr undefined
 
               lPayload = toPayload 'L' lFpr
 

@@ -3,9 +3,6 @@
 module TestUtil where
 
 import Control.Monad.Trans.State (State, state, modify)
-import Data.Knob
-import Data.Maybe (fromJust, isJust)
-import System.IO 
 import Test.QuickCheck
 
 import Handshake

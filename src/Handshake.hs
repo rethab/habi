@@ -1,61 +1,125 @@
 module Handshake where
 
+import Control.Exception (try)
 import Control.Monad (when, liftM)
-import Data.Binary.Put (putWord8, putWord16be, runPut)
-import Data.Binary.Get (getWord8, getWord16be, runGet)
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Except (Except, ExceptT(..), except)
+import Control.Monad.Trans.Except (throwE, withExceptT)
+import Data.Binary.Put (Put, putWord8, putWord16be, runPut)
+import Data.Binary.Get (Get, getWord8, getWord16be, runGetOrFail)
 import Data.Char (chr, ord)
+import Data.Word (Word8, Word16)
 import System.IO (Handle)
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 
-data Ctx = Ctx {
+import Crypto
+import Types
 
-    {- fingerprint of this/local party -}
-    fpr :: BS.ByteString
-
-} deriving (Show)
-
--- fingerprint
-type Fpr = BS.ByteString
 
 class (Monad m) => HandleMonad m where
-    hmPut  :: Handle -> BS.ByteString -> m ()
-    hmGet  :: Handle -> Int -> m BS.ByteString
+    hmPut  :: Handle -> BS.ByteString -> ExceptT Error m ()
+    hmGet  :: Handle -> Int -> ExceptT Error m BS.ByteString
 
 instance HandleMonad IO where
-    hmPut  = BS.hPut
-    hmGet  = BS.hGet
+    hmPut h bs = mapException $ BS.hPut h bs
+    hmGet h n = mapException $ BS.hGet h n
 
-leecherHello :: (HandleMonad hm) => Ctx -> Handle -> hm Fpr
-leecherHello ctx h = do
+mapException :: IO a -> ExceptT Error IO a
+mapException = withExceptT HandleException . ExceptT . try
+
+leecherHello :: (HandleMonad m) => Fpr -> Handle -> ExceptT Error m Fpr
+leecherHello myFpr h = do
     
     -- send fingerprint
-    hmPut h (LBS.toStrict . runPut $ lPacketID >> lFprLen)
-    hmPut h (fpr ctx)
+    hmPut h (strictPut $ packetID 'L' >> w16beLen myFpr)
+    hmPut h myFpr
 
     -- receive fingerprint
-    sPacketID <- (runGet getWord8 . LBS.fromStrict) `liftM` hmGet h 1
-    sFprLen <- (runGet getWord16be . LBS.fromStrict) `liftM` hmGet h 2
+    consumeHeader 'S' h
+    sFprLen <- consumeLen h
     hmGet h (fromIntegral sFprLen)
 
-  where lFprLen = putWord16be (fromIntegral $ BS.length (fpr ctx))
-        lPacketID = putWord8 (fromIntegral $ ord 'L')
+leecherSessionKey :: (CryptoMonad m, HandleMonad m) =>
+                      SessionKey
+                   -> Fpr
+                   -> Handle
+                   -> ExceptT Error m ()
+leecherSessionKey sessKey seederFpr h = do
+    
+    -- encrypt session key
+    encSessKey <- asymFor seederFpr sessKey
 
-seederHello :: (HandleMonad hm) => Ctx -> Handle -> hm Fpr
-seederHello ctx h = do
+    -- send session key
+    hmPut h (strictPut $ (packetID 'K') >> w16beLen encSessKey)
+    hmPut h encSessKey
+
+    -- receive ack
+    consumeHeader 'A' h
+
+    return ()
+
+seederHello :: (HandleMonad m) =>
+                Fpr
+             -> Handle
+             -> ExceptT Error m Fpr
+seederHello myFpr h = do
     
     -- receive fingerprint
-    lPacketID <- (runGet getWord8 . LBS.fromStrict) `liftM` hmGet h 1
-    lFprLen <- (runGet getWord16be . LBS.fromStrict) `liftM` hmGet h 2
+    consumeHeader 'L' h
+    lFprLen <- consumeLen h
     lFpr <- hmGet h (fromIntegral lFprLen)
 
     -- send fingerprint
-    hmPut h (LBS.toStrict . runPut $ sPacketID >> sFprLen)
-    hmPut h (fpr ctx)
+    hmPut h (strictPut $ packetID 'S' >> w16beLen myFpr)
+    hmPut h myFpr
 
     return lFpr
 
+seederAck :: (CryptoMonad m, HandleMonad m) =>
+              Handle
+           -> ExceptT Error m SessionKey
+seederAck h = do
 
-  where sFprLen = putWord16be (fromIntegral $ BS.length (fpr ctx))
-        sPacketID = putWord8 (fromIntegral $ ord 'S')
+    -- receive session key
+    consumeHeader 'K' h
+    sessKeyLen <- consumeLen h
+    encSessKey <- hmGet h (fromIntegral sessKeyLen)
+
+    -- decrpyt session key
+    sessKey <- asymDecr encSessKey
+    
+    -- encrypt session key
+    encAckPkg <- symEnc sessKey (strictPut $ packetID 'A')
+
+    -- send session key
+    hmPut h encAckPkg
+
+    return sessKey
+
+packetID :: Char -> Put
+packetID = putWord8 . fromIntegral . ord
+
+w16beLen :: BS.ByteString -> Put
+w16beLen = putWord16be . fromIntegral . BS.length
+
+strictPut :: Put -> BS.ByteString
+strictPut = LBS.toStrict . runPut
+
+runGetE :: (Monad m) => Get a -> BS.ByteString -> ExceptT Error m a
+runGetE g bs = ExceptT . return $ runGet g bs
+
+runGet :: Get a -> BS.ByteString -> Either Error a
+runGet g = mapEither . runGetOrFail g . LBS.fromStrict
+    where mapEither (Left l) = Left (DecodeError $ thrd l)
+          mapEither (Right r) = Right (thrd r)
+          thrd (_,_,x) = x
+
+consumeHeader :: (HandleMonad m) => Char -> Handle -> ExceptT Error m ()
+consumeHeader exp h = hmGet h 1 >>= runGetE getWord8 >>= expect
+    where expect w = when (exp /= act) (throwE $ UnexpectedPackage exp act)
+            where act = chr (fromIntegral w) 
+
+consumeLen :: (HandleMonad m) => Handle -> ExceptT Error m Word16
+consumeLen h = runGetE getWord16be =<< hmGet h 2
