@@ -4,7 +4,6 @@ import Control.Monad.State (State, runState)
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 import qualified Data.ByteString as BS
 import Data.Char (ord)
-import Data.Knob
 import Data.Maybe
 import System.IO
 import Test.Framework.Providers.HUnit
@@ -17,8 +16,7 @@ import Types
                       
 tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_hello" seeder_hello
-        --, testProperty "leecher_session_key" leecher_session_key
-        --, testCase "decrypt_garbage" decrypt_garbage
+        , testProperty "leecher_session_key" leecher_session_key
         ]
 
 leecher_hello sFpr = BS.length sFpr `between` (1,100) ==>
@@ -27,16 +25,10 @@ leecher_hello sFpr = BS.length sFpr `between` (1,100) ==>
 
         where fprExchg = leecherHello lFpr undefined
 
-              sPayload = toPayload 'S' sFpr
+              sPayload = toPayload 'S' (Just sFpr)
 
               lFpr = BS.pack [1,2,3,4,5]
-              lPayload = toPayload 'L' lFpr
-
-              toPayload :: Char -> BS.ByteString -> BS.ByteString
-              toPayload i f = BS.pack [ fromIntegral $ ord i
-                                      , 0
-                                      , fromIntegral $ BS.length f ]
-                              `BS.append` f
+              lPayload = toPayload 'L' (Just lFpr)
 
 seeder_hello lFpr = BS.length lFpr `between` (1,100) ==>
     let (Right ret, MockState _ w) = runAll fprExchg (newMock lPayload)
@@ -44,16 +36,26 @@ seeder_hello lFpr = BS.length lFpr `between` (1,100) ==>
 
         where fprExchg = seederHello sFpr undefined
 
-              lPayload = toPayload 'L' lFpr
+              lPayload = toPayload 'L' (Just lFpr)
 
               sFpr = BS.pack [1,2,3,4,5]
-              sPayload = toPayload 'S' sFpr
+              sPayload = toPayload 'S' (Just sFpr)
 
-              toPayload :: Char -> BS.ByteString -> BS.ByteString
-              toPayload i f = BS.pack [ fromIntegral $ ord i
-                                      , 0
-                                      , fromIntegral $ BS.length f ]
-                              `BS.append` f
+leecher_session_key sessKey = BS.length sessKey `between` (1,100) ==>
+    let (Right (), MockState _ w) = runAll skExchg (newMock sPayload)
+    in w == lPayload
+        where skExchg = leecherSessionKey sessKey lFpr undefined
+
+              sPayload = toPayload 'A' Nothing
+
+              lFpr = BS.pack [1,2,3,4,5]
+              lPayload = toPayload 'K' (Just $ mock_encr_async sessKey)
+
+toPayload :: Char -> Maybe BS.ByteString -> BS.ByteString
+toPayload i mbc = (fromIntegral $ ord i) `BS.cons` contents mbc
+    where contents Nothing = BS.empty
+          contents (Just c) =
+            0 `BS.cons` (fromIntegral $ BS.length c) `BS.cons` c
 
 runAll :: ExceptT Error (State MockState) a
        -> MockState
