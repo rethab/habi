@@ -17,6 +17,7 @@ import Types
 tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_hello" seeder_hello
         , testProperty "leecher_session_key" leecher_session_key
+        , testProperty "seeder_ack" seeder_ack
         ]
 
 leecher_hello sFpr = BS.length sFpr `between` (1,100) ==>
@@ -50,6 +51,15 @@ leecher_session_key sessKey = BS.length sessKey `between` (1,100) ==>
 
               lFpr = BS.pack [1,2,3,4,5]
               lPayload = toPayload 'K' (Just $ mock_encr_async sessKey)
+
+seeder_ack sessKey = BS.length sessKey `between` (1,100) ==>
+    let (Right ret, MockState _ w) = runAll skExchg (newMock lPayload)
+    in sessKey == ret && w == sPayload
+        where skExchg = seederAck undefined
+
+              lPayload = toPayload 'K' (Just $ mock_encr_async sessKey)
+
+              sPayload = mock_encr_sync (BS.singleton . fromIntegral $ ord 'A')
 
 toPayload :: Char -> Maybe BS.ByteString -> BS.ByteString
 toPayload i mbc = (fromIntegral $ ord i) `BS.cons` contents mbc

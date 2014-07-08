@@ -4,6 +4,7 @@ module TestUtil where
 
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.State (State, state, modify)
+import Data.Word (Word8)
 import Test.QuickCheck
 
 import Handshake
@@ -50,8 +51,10 @@ mock_decr_async = BS.map safePred
 mock_encr_sync  = BS.map (safeSucc . safeSucc)
 mock_decr_sync  = BS.map (safePred . safePred)
 
+safeSucc :: Word8 -> Word8
 safeSucc n | n < 255   = succ n
-           | otherwise = n
+           | otherwise = 0
 
+safePred :: Word8 -> Word8
 safePred n | n > 0     = pred n
-           | otherwise = n
+           | otherwise = 255
