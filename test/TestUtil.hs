@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 module TestUtil where
 
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.State (State, state, modify)
 import Test.QuickCheck
 
@@ -30,9 +31,9 @@ newMock bs = MockState bs BS.empty
 
 instance HandleMonad (State MockState) where
 
-    hmPut _ bs = modify $ \(MockState r w) ->
+    hmPut _ bs = lift . modify $ \(MockState r w) ->
         MockState r (w `BS.append` bs)
 
-    hmGet _ n = state $ \(MockState r w) ->
+    hmGet _ n = lift . state $ \(MockState r w) ->
         let (h, t) = BS.splitAt n r
         in (h, MockState t w)

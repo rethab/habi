@@ -10,10 +10,10 @@ type SessionKey = BS.ByteString
 
 data Error =
       -- package 'exp' was expected, but 'act' was received
-      UnexpectedPackage { exp :: Char, act :: Char }
+      UnexpectedPackage { _exp :: Char, _act :: Char }
 
       -- exception from operation on handle
-    | HandleException { exc :: SomeException }
+    | HandleException { _exc :: SomeException }
 
       -- error while decoding binary
-    | DecodeError { msg :: String }
+    | DecodeError { _msg :: String }

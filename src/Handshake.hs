@@ -1,14 +1,12 @@
 module Handshake where
 
 import Control.Exception (try)
-import Control.Monad (when, liftM)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (Except, ExceptT(..), except)
-import Control.Monad.Trans.Except (throwE, withExceptT)
+import Control.Monad (when)
+import Control.Monad.Trans.Except (ExceptT(..), throwE, withExceptT)
 import Data.Binary.Put (Put, putWord8, putWord16be, runPut)
 import Data.Binary.Get (Get, getWord8, getWord16be, runGetOrFail)
 import Data.Char (chr, ord)
-import Data.Word (Word8, Word16)
+import Data.Word (Word16)
 import System.IO (Handle)
 
 import qualified Data.ByteString as BS
@@ -117,8 +115,8 @@ runGet g = mapEither . runGetOrFail g . LBS.fromStrict
           thrd (_,_,x) = x
 
 consumeHeader :: (HandleMonad m) => Char -> Handle -> ExceptT Error m ()
-consumeHeader exp h = hmGet h 1 >>= runGetE getWord8 >>= expect
-    where expect w = when (exp /= act) (throwE $ UnexpectedPackage exp act)
+consumeHeader c h = hmGet h 1 >>= runGetE getWord8 >>= expect
+    where expect w = when (c /= act) (throwE $ UnexpectedPackage c act)
             where act = chr (fromIntegral w) 
 
 consumeLen :: (HandleMonad m) => Handle -> ExceptT Error m Word16
