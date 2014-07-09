@@ -50,7 +50,7 @@ instance CryptoMonad (ReaderT CryptoCtx IO) where
         return $ cbcEncrypt ctx iv plain
 
     -- sym decryption with cryptocipher
-    symEnc key cipher = do
+    symDecr key cipher = do
         ctx <- lift2 CryptoError $ initAES256 key
         iv <- lift2 CryptoError genIV
         return $ cbcDecrypt ctx iv cipher

@@ -1,6 +1,6 @@
 module HandshakeTest (tests) where
 
-import Control.Monad.State (State, runState)
+import qualified Control.Monad.State as S (State, runState)
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 import qualified Data.ByteString as BS
 import Data.Char (ord)
@@ -9,6 +9,7 @@ import System.IO
 import Test.Framework.Providers.HUnit
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
+import Test.HUnit
 import TestUtil
 
 import Handshake
@@ -18,6 +19,9 @@ tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_hello" seeder_hello
         , testProperty "leecher_session_key" leecher_session_key
         , testProperty "seeder_ack" seeder_ack
+        , testCase     "unexpected_package" unexpected_package
+        , testCase     "no_payload" no_payload
+        , testCase     "full_handshake_it" full_handshake_it
         ]
 
 leecher_hello sFpr = BS.length sFpr `between` (1,100) ==>
@@ -61,13 +65,36 @@ seeder_ack sessKey = BS.length sessKey `between` (1,100) ==>
 
               sPayload = mock_encr_sync (BS.singleton . fromIntegral $ ord 'A')
 
+unexpected_package =
+    let (Left (UnexpectedPackage ex ac), MockState _ _) =
+                runAll skExchg (newMock lPayload)
+    in do ex @?= 'K'
+          ac @?= 'U'
+        where skExchg = seederAck undefined
+
+              lPayload = toPayload 'U' Nothing
+
+no_payload =
+    let (Left (DecodeError msg), MockState _ _) =
+                runAll skExchg (newMock lPayload)
+    in assertBool "" (not $ null msg) -- force eval
+        where skExchg = seederAck undefined
+
+              lPayload = BS.empty
+
+full_handshake_it = 
+
+
+
+-- utilities
+
 toPayload :: Char -> Maybe BS.ByteString -> BS.ByteString
 toPayload i mbc = (fromIntegral $ ord i) `BS.cons` contents mbc
     where contents Nothing = BS.empty
           contents (Just c) =
             0 `BS.cons` (fromIntegral $ BS.length c) `BS.cons` c
 
-runAll :: ExceptT Error (State MockState) a
+runAll :: ExceptT Error (S.State MockState) a
        -> MockState
        -> (Either Error a, MockState)
-runAll = runState . runExceptT
+runAll = S.runState . runExceptT
