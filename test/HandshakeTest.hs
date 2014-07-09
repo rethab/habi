@@ -9,6 +9,7 @@ import Network.Socket
 import System.Directory
 import System.FilePath
 import System.IO
+import System.Random
 import Test.Framework.Providers.HUnit
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
@@ -90,7 +91,8 @@ no_payload =
               lPayload = BS.empty
 
 full_handshake_it = do
-    socketfile <- fmap (</> "habi.socket") getTemporaryDirectory
+    filename <- randomString 20
+    socketfile <- fmap (</> filename) getTemporaryDirectory
 
     -- seeder puts session key in here
     sSessHolder <- newEmptyMVar
@@ -100,24 +102,25 @@ full_handshake_it = do
     -- seeder must be running before leecher can connect
     sBarrier <- newEmptyMVar
 
-    forkIO $ runSeeder socketfile sSessHolder sBarrier
+    _ <- forkIO $ runSeeder socketfile sSessHolder sBarrier
 
-    _ <- takeMVar sBarrier --wait
-    forkIO $ runLeecher socketfile lSessHolder
+    Just _ <- takeMVar' 2000 sBarrier --wait
+    _ <- forkIO $ runLeecher socketfile lSessHolder
 
-    sSessKey <- takeMVar sSessHolder
-    lSessKey <- takeMVar lSessHolder
+    Just sSessKey <- takeMVar' 10000 sSessHolder
+    Just lSessKey <- takeMVar' 10000 lSessHolder
 
     -- both end up with the same session key
     sSessKey @?= lSessKey
 
   where runSeeder socketfile sessHolder barrier = do
           sock <- socket AF_UNIX Stream 0
+          bind sock $ SockAddrUnix socketfile
           listen sock 1
           putMVar barrier True
           (conn, _) <- accept sock
           h <- socketToHandle conn ReadWriteMode
-          Right sessKey <- runWithCtx "" $ seederHandshake bob_pub_fpr h
+          sessKey <- runWithCtx "../h-gpgme/test/bob" $ seederHandshake bob_pub_fpr h
           putMVar sessHolder sessKey
           sClose sock
           sClose conn
@@ -126,12 +129,15 @@ full_handshake_it = do
           sock <- socket AF_UNIX Stream 0
           connect sock $ SockAddrUnix socketfile
           h <- socketToHandle sock ReadWriteMode
-          Right sessKey <- runWithCtx "" $ leecherHandshake bob_pub_fpr h
+          sessKey <- runWithCtx "../h-gpgme/test/alice" $ leecherHandshake bob_pub_fpr h
           putMVar sessHolder sessKey
           sClose sock
 
-        runWithCtx gpgDir act = 
-          runReaderT (runExceptT act) (CryptoCtx gpgDir)
+        runWithCtx gpgDir act = do
+          eres <- runReaderT (runExceptT act) (CryptoCtx gpgDir)
+          case eres of
+            Left err -> error (show err)
+            Right res -> return res
           
     
 -- utilities
@@ -146,3 +152,16 @@ runAll :: ExceptT Error (S.State MockState) a
        -> MockState
        -> (Either Error a, MockState)
 runAll = S.runState . runExceptT
+
+randomString :: Int -> IO String
+randomString n = (take n . randomRs ('a', 'z')) `fmap` newStdGen
+
+-- try to take mvar again and again for 't' milliseconds
+takeMVar' :: Int -> MVar a -> IO (Maybe a)
+takeMVar' t mv = go 0
+    where go n | n * (t `div` 10) > t = return Nothing
+          go n | otherwise = do
+            mbv <- tryTakeMVar mv
+            case mbv of
+                Just v -> return (Just v)
+                Nothing -> threadDelay (t * 100) >> go (n+1)

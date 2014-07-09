@@ -29,6 +29,7 @@ data Error =
 
       -- error from underlying crypto module
     | CryptoError { _cause :: String }
+    deriving (Show)
 
 class (Monad m) => CryptoMonad m where
     asymEncr   :: Fpr -> Plain -> ExceptT Error m Encrypted
