@@ -24,13 +24,26 @@ instance HandleMonad IO where
     hmPut h bs = mapException $ BS.hPut h bs
     hmGet h n = mapException $ BS.hGet h n
 
-leecherHandshake (HandleMonad m, CryptoMonad m) => Fpr -> Handle -> ExceptT Error m SessionKey
+leecherHandshake (HandleMonad m, CryptoMonad m) =>
+                    Fpr -> Handle -> ExceptT Error m SessionKey
 leecherHandshake lFpr h = do
 
     -- send fingerprint and get fingerprint
     sFpr <- leecherHello lFpr h
 
-    leecherSessionKey
+    -- send session key
+    sessKey <- genSessKey
+    leecherSessionKey sessKey sFpr h
+
+seederHandshake (HandleMonad m, CryptoMonad m) =>
+                    Fpr -> Handle -> ExceptT Error m SessionKey
+seederHandshake sFpr h = do
+
+    -- send fingerprint and get fingerprint
+    sFpr <- seederHello lFpr h
+
+    -- get session key and acknowledge
+    seederAck h
 
 leecherHello :: (HandleMonad m) => Fpr -> Handle -> ExceptT Error m Fpr
 leecherHello myFpr h = do

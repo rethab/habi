@@ -48,8 +48,7 @@ instance CryptoMonad (ReaderT CryptoCtx IO) where
         iv <- genIV
         cbcDecrypt ctx iv cipher
 
-genSessionKey :: IO SessionKey
-genSessionKey = BS.pack `fmap` replicateM 32 randomIO
+    genSessKey = BS.pack `fmap` replicateM 32 randomIO
 
 genIV :: IO (Either String (IV AES256))
 genIV = (maybe (Left "invalid iv") Right . makeIV) `fmap` ivBS

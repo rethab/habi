@@ -45,7 +45,7 @@ instance CryptoMonad (State MockState) where
     asymDecr   = lift . return . mock_decr_async
     symEnc _   = lift . return . mock_encr_sync
     symDecr _  = lift . return . mock_decr_sync
-    genSessKey = undefined
+    genSessKey = error "genSessKey"
 
 mock_encr_async = BS.map safeSucc
 mock_decr_async = BS.map safePred
