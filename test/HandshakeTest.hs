@@ -1,10 +1,13 @@
 module HandshakeTest (tests) where
 
-import qualified Control.Monad.State as S (State, runState)
-import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
-import qualified Data.ByteString as BS
+import Control.Concurrent
+import Control.Monad.Trans.Except
+import Control.Monad.Trans.Reader
 import Data.Char (ord)
 import Data.Maybe
+import Network.Socket
+import System.Directory
+import System.FilePath
 import System.IO
 import Test.Framework.Providers.HUnit
 import Test.Framework.Providers.QuickCheck2
@@ -12,6 +15,10 @@ import Test.QuickCheck
 import Test.HUnit
 import TestUtil
 
+import qualified Control.Monad.State as S (State, runState)
+import qualified Data.ByteString     as BS
+
+import Crypto
 import Handshake
 import Types
                       
@@ -82,10 +89,51 @@ no_payload =
 
               lPayload = BS.empty
 
-full_handshake_it = 
+full_handshake_it = do
+    socketfile <- fmap (</> "habi.socket") getTemporaryDirectory
 
+    -- seeder puts session key in here
+    sSessHolder <- newEmptyMVar
+    -- leecher puts session key in here
+    lSessHolder <- newEmptyMVar
 
+    -- seeder must be running before leecher can connect
+    sBarrier <- newEmptyMVar
 
+    forkIO $ runSeeder socketfile sSessHolder sBarrier
+
+    _ <- takeMVar sBarrier --wait
+    forkIO $ runLeecher socketfile lSessHolder
+
+    sSessKey <- takeMVar sSessHolder
+    lSessKey <- takeMVar lSessHolder
+
+    -- both end up with the same session key
+    sSessKey @?= lSessKey
+
+  where runSeeder socketfile sessHolder barrier = do
+          sock <- socket AF_UNIX Stream 0
+          listen sock 1
+          putMVar barrier True
+          (conn, _) <- accept sock
+          h <- socketToHandle conn ReadWriteMode
+          Right sessKey <- runWithCtx "" $ seederHandshake bob_pub_fpr h
+          putMVar sessHolder sessKey
+          sClose sock
+          sClose conn
+
+        runLeecher socketfile sessHolder = do
+          sock <- socket AF_UNIX Stream 0
+          connect sock $ SockAddrUnix socketfile
+          h <- socketToHandle sock ReadWriteMode
+          Right sessKey <- runWithCtx "" $ leecherHandshake bob_pub_fpr h
+          putMVar sessHolder sessKey
+          sClose sock
+
+        runWithCtx gpgDir act = 
+          runReaderT (runExceptT act) (CryptoCtx gpgDir)
+          
+    
 -- utilities
 
 toPayload :: Char -> Maybe BS.ByteString -> BS.ByteString

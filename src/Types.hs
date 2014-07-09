@@ -1,7 +1,11 @@
 module Types where
 
-import Control.Exception (SomeException, try)
-import Control.Monad.Trans.Except (ExceptT(..), withExceptT)
+import Control.Exception          (SomeException)
+import Control.Monad.Trans        (lift)
+import Control.Monad.Trans.Except (ExceptT(..))
+import Control.Monad.Trans.Reader (ReaderT(..))
+import System.IO                  (Handle)
+
 import qualified Data.ByteString as BS
 
 -- fingerprint
@@ -26,9 +30,25 @@ data Error =
       -- error from underlying crypto module
     | CryptoError { _cause :: String }
 
-mapException :: IO a -> ExceptT Error IO a
-mapException = withExceptT HandleException . ExceptT . try
+class (Monad m) => CryptoMonad m where
+    asymEncr   :: Fpr -> Plain -> ExceptT Error m Encrypted
+    asymDecr   :: Encrypted -> ExceptT Error m Plain
+    symEnc     :: SessionKey -> Plain -> ExceptT Error m Encrypted
+    symDecr    :: SessionKey -> Encrypted -> ExceptT Error m Plain
+    genSessKey :: ExceptT Error m SessionKey
+
+class (Monad m) => HandleMonad m where
+    hmPut  :: Handle -> BS.ByteString -> ExceptT Error m ()
+    hmGet  :: Handle -> Int -> ExceptT Error m BS.ByteString
+
+data CryptoCtx = CryptoCtx {
+      -- homedir of gpg
+      gpgDir :: String
+}
 
 mapLeft :: (e -> Error) -> Either e a -> Either Error a
 mapLeft f (Left v)  = Left (f v)
 mapLeft _ (Right v) = Right v
+
+lift2 :: (e -> Error) -> IO (Either e a) -> ExceptT Error (ReaderT CryptoCtx IO) a
+lift2 eTrans act = ExceptT . lift $ mapLeft eTrans `fmap` act

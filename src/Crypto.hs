@@ -1,35 +1,17 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Crypto where
 
-import Control.Monad (replicateM)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (ExceptT(..))
+import Control.Monad              (replicateM)
+import Control.Monad.Trans        (lift)
 import Control.Monad.Trans.Reader (ReaderT, ask)
-import Crypto.Cipher (IV, AES256, cipherInit, makeIV, makeKey)
-import Crypto.Cipher (cbcDecrypt, cbcEncrypt)
-import Crypto.Gpgme (encryptSign', decryptVerify')
-import System.Random (randomIO)
+import Crypto.Cipher              (IV, AES256, cipherInit, makeIV, makeKey)
+import Crypto.Cipher              (cbcDecrypt, cbcEncrypt)
+import Crypto.Gpgme               (encryptSign', decryptVerify')
+import System.Random              (randomIO)
 
 import qualified Data.ByteString as BS
 
 import Types
-
-class (Monad m) => CryptoMonad m where
-    asymEncr   :: Fpr -> Plain -> ExceptT Error m Encrypted
-    asymDecr   :: Encrypted -> ExceptT Error m Plain
-    symEnc     :: SessionKey -> Plain -> ExceptT Error m Encrypted
-    symDecr    :: SessionKey -> Encrypted -> ExceptT Error m Plain
-    genSessKey :: ExceptT Error m SessionKey
-
-data CryptoCtx = CryptoCtx {
-      -- homedir of gpg
-      gpgDir :: String
-}
-
-lift2 :: (e -> Error)
-     -> IO (Either e a)
-     -> ExceptT Error (ReaderT CryptoCtx IO) a
-lift2 eTrans act = ExceptT . lift $ mapLeft eTrans `fmap` act
 
 instance CryptoMonad (ReaderT CryptoCtx IO) where
 

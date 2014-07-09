@@ -1,27 +1,24 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Handshake where
 
-import Control.Monad (when)
+import Control.Exception          (try)
+import Control.Monad              (when)
 import Control.Monad.Trans.Except (ExceptT(..), throwE)
-import Data.Binary.Put (Put, putWord8, putWord16be, runPut)
-import Data.Binary.Get (Get, getWord8, getWord16be, runGetOrFail)
-import Data.Char (chr, ord)
-import Data.Word (Word16)
-import System.IO (Handle)
+import Control.Monad.Trans.Reader (ReaderT)
+import Data.Binary.Put            (Put, putWord8, putWord16be, runPut)
+import Data.Binary.Get            (Get, getWord8, getWord16be, runGetOrFail)
+import Data.Char                  (chr, ord)
+import Data.Word                  (Word16)
+import System.IO                  (Handle)
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 
-import Crypto
 import Types
 
-
-class (Monad m) => HandleMonad m where
-    hmPut  :: Handle -> BS.ByteString -> ExceptT Error m ()
-    hmGet  :: Handle -> Int -> ExceptT Error m BS.ByteString
-
-instance HandleMonad IO where
-    hmPut h bs = mapException $ BS.hPut h bs
-    hmGet h n = mapException $ BS.hGet h n
+instance HandleMonad (ReaderT CryptoCtx IO) where
+    hmPut h bs = lift2 HandleException . try $ BS.hPut h bs
+    hmGet h n = lift2 HandleException . try $ BS.hGet h n
 
 leecherHandshake :: (HandleMonad m, CryptoMonad m) =>
                      Fpr -> Handle -> ExceptT Error m SessionKey

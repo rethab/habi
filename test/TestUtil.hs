@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 module TestUtil where
@@ -9,6 +10,7 @@ import Test.QuickCheck
 
 import Handshake
 import Crypto
+import Types
 
 import qualified Data.ByteString as BS
 
@@ -17,6 +19,12 @@ instance Arbitrary BS.ByteString where
 
 between :: Int -> (Int, Int) -> Bool
 between x (b, t) = x <= t && x >= b
+
+alice_pub_fpr :: BS.ByteString
+alice_pub_fpr = "EAACEB8A"
+
+bob_pub_fpr :: BS.ByteString
+bob_pub_fpr = "6C4FB8F2"
 
 data MockState = MockState {
 
@@ -47,6 +55,8 @@ instance CryptoMonad (State MockState) where
     symDecr _  = lift . return . mock_decr_sync
     genSessKey = error "genSessKey"
 
+mock_encr_async, mock_decr_async :: BS.ByteString -> BS.ByteString
+mock_encr_sync, mock_decr_sync :: BS.ByteString -> BS.ByteString
 mock_encr_async = BS.map safeSucc
 mock_decr_async = BS.map safePred
 mock_encr_sync  = BS.map (safeSucc . safeSucc)
