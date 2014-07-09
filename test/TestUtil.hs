@@ -41,7 +41,7 @@ instance HandleMonad (State MockState) where
         in (h, MockState t w)
 
 instance CryptoMonad (State MockState) where
-    asymFor _  = lift . return . mock_encr_async
+    asymEncr _  = lift . return . mock_encr_async
     asymDecr   = lift . return . mock_decr_async
     symEnc _   = lift . return . mock_encr_sync
     symDecr _  = lift . return . mock_decr_sync

@@ -3,7 +3,7 @@ module Crypto where
 
 import Control.Monad (replicateM)
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad.Trans.Except (ExceptT(..))
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Crypto.Cipher (IV, AES256, cipherInit, makeIV, makeKey)
 import Crypto.Cipher (cbcDecrypt, cbcEncrypt)
@@ -26,29 +26,36 @@ data CryptoCtx = CryptoCtx {
       gpgDir :: String
 }
 
+lift2 :: (e -> Error)
+     -> IO (Either e a)
+     -> ExceptT Error (ReaderT CryptoCtx IO) a
+lift2 eTrans act = ExceptT . lift $ mapLeft eTrans `fmap` act
+
 instance CryptoMonad (ReaderT CryptoCtx IO) where
 
     -- asym encryption with gpgme
-    asymEncr recFpr plain = lift ask >>= \ctx ->
-        mapException $ encryptSign' (gpgDir ctx) recFpr plain
+    asymEncr recFpr plain = do
+        ctx <- lift ask
+        lift2 CryptoError $ encryptSign' (gpgDir ctx) recFpr plain
 
     -- asym decryption with gpgme
-    asymDecr cipher = ask >>= \ctx ->
-        mapException $ decryptVerify' (gpgDir ctx) cipher
+    asymDecr cipher = do
+        ctx <- lift ask
+        lift2 (CryptoError . show) $ decryptVerify' (gpgDir ctx) cipher
 
     -- sym encryption with cryptocipher
     symEnc key plain = do
-        ctx <- initAES256 key
-        iv <- genIV
-        cbcEncrypt ctx iv plain
+        ctx <- lift2 CryptoError $ initAES256 key
+        iv <- lift2 CryptoError genIV
+        return $ cbcEncrypt ctx iv plain
 
     -- sym decryption with cryptocipher
     symEnc key cipher = do
-        ctx <- initAES256 key
-        iv <- genIV
-        cbcDecrypt ctx iv cipher
+        ctx <- lift2 CryptoError $ initAES256 key
+        iv <- lift2 CryptoError genIV
+        return $ cbcDecrypt ctx iv cipher
 
-    genSessKey = BS.pack `fmap` replicateM 32 randomIO
+    genSessKey = lift2 CryptoError $ (Right . BS.pack) `fmap` replicateM 32 randomIO
 
 genIV :: IO (Either String (IV AES256))
 genIV = (maybe (Left "invalid iv") Right . makeIV) `fmap` ivBS

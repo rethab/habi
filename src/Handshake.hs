@@ -1,8 +1,7 @@
 module Handshake where
 
-import Control.Exception (try)
 import Control.Monad (when)
-import Control.Monad.Trans.Except (ExceptT(..), throwE, withExceptT)
+import Control.Monad.Trans.Except (ExceptT(..), throwE)
 import Data.Binary.Put (Put, putWord8, putWord16be, runPut)
 import Data.Binary.Get (Get, getWord8, getWord16be, runGetOrFail)
 import Data.Char (chr, ord)
@@ -24,23 +23,25 @@ instance HandleMonad IO where
     hmPut h bs = mapException $ BS.hPut h bs
     hmGet h n = mapException $ BS.hGet h n
 
-leecherHandshake (HandleMonad m, CryptoMonad m) =>
-                    Fpr -> Handle -> ExceptT Error m SessionKey
+leecherHandshake :: (HandleMonad m, CryptoMonad m) =>
+                     Fpr -> Handle -> ExceptT Error m SessionKey
 leecherHandshake lFpr h = do
 
     -- send fingerprint and get fingerprint
     sFpr <- leecherHello lFpr h
 
-    -- send session key
+    -- generate and send session key
     sessKey <- genSessKey
     leecherSessionKey sessKey sFpr h
 
-seederHandshake (HandleMonad m, CryptoMonad m) =>
+    return sessKey
+
+seederHandshake :: (HandleMonad m, CryptoMonad m) =>
                     Fpr -> Handle -> ExceptT Error m SessionKey
 seederHandshake sFpr h = do
 
     -- send fingerprint and get fingerprint
-    sFpr <- seederHello lFpr h
+    _ <- seederHello sFpr h
 
     -- get session key and acknowledge
     seederAck h
@@ -65,7 +66,7 @@ leecherSessionKey :: (CryptoMonad m, HandleMonad m) =>
 leecherSessionKey sessKey seederFpr h = do
     
     -- encrypt session key
-    encSessKey <- asymFor seederFpr sessKey
+    encSessKey <- asymEncr seederFpr sessKey
 
     -- send session key
     hmPut h (strictPut $ (packetID 'K') >> w16beLen encSessKey)

@@ -23,5 +23,12 @@ data Error =
       -- error while decoding binary
     | DecodeError { _msg :: String }
 
+      -- error from underlying crypto module
+    | CryptoError { _cause :: String }
+
 mapException :: IO a -> ExceptT Error IO a
 mapException = withExceptT HandleException . ExceptT . try
+
+mapLeft :: (e -> Error) -> Either e a -> Either Error a
+mapLeft f (Left v)  = Left (f v)
+mapLeft _ (Right v) = Right v
