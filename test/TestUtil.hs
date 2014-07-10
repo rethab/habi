@@ -8,8 +8,7 @@ import Control.Monad.Trans.State (State, state, modify)
 import Data.Word (Word8)
 import Test.QuickCheck
 
-import Handshake
-import Crypto
+import Crypto ()
 import Types
 
 import qualified Data.ByteString as BS
@@ -17,7 +16,7 @@ import qualified Data.ByteString as BS
 instance Arbitrary BS.ByteString where
     arbitrary = fmap BS.pack arbitrary
 
-between :: Int -> (Int, Int) -> Bool
+between :: (Ord a) => a -> (a, a) -> Bool
 between x (b, t) = x <= t && x >= b
 
 alice_pub_fpr :: BS.ByteString

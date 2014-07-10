@@ -4,7 +4,6 @@ import Control.Concurrent
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader
 import Data.Char (ord)
-import Data.Maybe
 import Network.Socket
 import System.Directory
 import System.FilePath
@@ -19,7 +18,6 @@ import TestUtil
 import qualified Control.Monad.State as S (State, runState)
 import qualified Data.ByteString     as BS
 
-import Crypto
 import Handshake
 import Types
                       
@@ -29,9 +27,10 @@ tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_ack" seeder_ack
         , testCase     "unexpected_package" unexpected_package
         , testCase     "no_payload" no_payload
-        , testCase     "full_handshake_it" full_handshake_it
+        -- , testCase     "full_handshake_it" full_handshake_it
         ]
 
+leecher_hello :: BS.ByteString -> Property
 leecher_hello sFpr = BS.length sFpr `between` (1,100) ==>
     let (Right ret, MockState _ w) = runAll fprExchg (newMock sPayload)
     in ret == sFpr && w == lPayload
@@ -43,6 +42,7 @@ leecher_hello sFpr = BS.length sFpr `between` (1,100) ==>
               lFpr = BS.pack [1,2,3,4,5]
               lPayload = toPayload 'L' (Just lFpr)
 
+seeder_hello :: BS.ByteString -> Property
 seeder_hello lFpr = BS.length lFpr `between` (1,100) ==>
     let (Right ret, MockState _ w) = runAll fprExchg (newMock lPayload)
     in ret == lFpr && w == sPayload
@@ -54,6 +54,7 @@ seeder_hello lFpr = BS.length lFpr `between` (1,100) ==>
               sFpr = BS.pack [1,2,3,4,5]
               sPayload = toPayload 'S' (Just sFpr)
 
+leecher_session_key :: BS.ByteString -> Property
 leecher_session_key sessKey = BS.length sessKey `between` (1,100) ==>
     let (Right (), MockState _ w) = runAll skExchg (newMock sPayload)
     in w == lPayload
@@ -64,6 +65,7 @@ leecher_session_key sessKey = BS.length sessKey `between` (1,100) ==>
               lFpr = BS.pack [1,2,3,4,5]
               lPayload = toPayload 'K' (Just $ mock_encr_async sessKey)
 
+seeder_ack :: BS.ByteString -> Property
 seeder_ack sessKey = BS.length sessKey `between` (1,100) ==>
     let (Right ret, MockState _ w) = runAll skExchg (newMock lPayload)
     in sessKey == ret && w == sPayload
@@ -73,6 +75,7 @@ seeder_ack sessKey = BS.length sessKey `between` (1,100) ==>
 
               sPayload = mock_encr_sync (BS.singleton . fromIntegral $ ord 'A')
 
+unexpected_package :: IO ()
 unexpected_package =
     let (Left (UnexpectedPackage ex ac), MockState _ _) =
                 runAll skExchg (newMock lPayload)
@@ -82,6 +85,7 @@ unexpected_package =
 
               lPayload = toPayload 'U' Nothing
 
+no_payload :: IO ()
 no_payload =
     let (Left (DecodeError msg), MockState _ _) =
                 runAll skExchg (newMock lPayload)
@@ -90,6 +94,7 @@ no_payload =
 
               lPayload = BS.empty
 
+full_handshake_it :: IO ()
 full_handshake_it = do
     filename <- randomString 20
     socketfile <- fmap (</> filename) getTemporaryDirectory
@@ -133,8 +138,8 @@ full_handshake_it = do
           putMVar sessHolder sessKey
           sClose sock
 
-        runWithCtx gpgDir act = do
-          eres <- runReaderT (runExceptT act) (CryptoCtx gpgDir)
+        runWithCtx homedir act = do
+          eres <- runReaderT (runExceptT act) (CryptoCtx homedir)
           case eres of
             Left err -> error (show err)
             Right res -> return res
