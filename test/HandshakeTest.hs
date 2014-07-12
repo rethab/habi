@@ -19,6 +19,7 @@ import qualified Control.Monad.State as S (State, runState)
 import qualified Data.ByteString     as BS
 
 import Handshake
+import Crypto
 import Types
                       
 tests = [ testProperty "leecher_hello" leecher_hello
@@ -27,7 +28,7 @@ tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_ack" seeder_ack
         , testCase     "unexpected_package" unexpected_package
         , testCase     "no_payload" no_payload
-        -- , testCase     "full_handshake_it" full_handshake_it
+        , testCase     "full_handshake_it" full_handshake_it
         ]
 
 leecher_hello :: BS.ByteString -> Property
@@ -71,9 +72,12 @@ seeder_ack sessKey = BS.length sessKey `between` (1,100) ==>
     in sessKey == ret && w == sPayload
         where skExchg = seederAck undefined
 
+              -- leecher send asym encrypted session key
               lPayload = toPayload 'K' (Just $ mock_encr_async sessKey)
 
-              sPayload = mock_encr_sync (BS.singleton . fromIntegral $ ord 'A')
+              -- seeder sends sym encrypted acknowledge
+              sPayload = mock_encr_sync (pad 32 $ singleton 'A')
+              singleton = BS.singleton . fromIntegral . ord
 
 unexpected_package :: IO ()
 unexpected_package =
@@ -128,7 +132,7 @@ full_handshake_it = do
           sessKey <- runWithCtx "../h-gpgme/test/bob" $ seederHandshake bob_pub_fpr h
           putMVar sessHolder sessKey
           sClose sock
-          sClose conn
+          hClose h
 
         runLeecher socketfile sessHolder = do
           sock <- socket AF_UNIX Stream 0
@@ -136,7 +140,7 @@ full_handshake_it = do
           h <- socketToHandle sock ReadWriteMode
           sessKey <- runWithCtx "../h-gpgme/test/alice" $ leecherHandshake bob_pub_fpr h
           putMVar sessHolder sessKey
-          sClose sock
+          hClose h
 
         runWithCtx homedir act = do
           eres <- runReaderT (runExceptT act) (CryptoCtx homedir)
