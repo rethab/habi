@@ -4,12 +4,11 @@ module Crypto where
 import Control.Monad              (replicateM)
 import Control.Monad.Trans        (lift)
 import Control.Monad.Trans.Reader (ReaderT, ask)
-import Crypto.Cipher              (IV, AES256, cipherInit, makeIV, makeKey)
-import Crypto.Cipher              (cbcDecrypt, cbcEncrypt)
 import Crypto.Gpgme               (encryptSign', decryptVerify')
 import Data.Word                  (Word8)
 import System.Random              (randomIO)
 
+import qualified Crypto.Cipher   as C
 import qualified Data.ByteString as BS
 
 import Types
@@ -27,18 +26,18 @@ instance CryptoMonad (ReaderT CryptoCtx IO) where
         lift2 (CryptoError . show) $ decryptVerify' (gpgDir ctx) cipher
 
     -- sym encryption with cryptocipher
-    symEnc key plain = do
+    symEnc key (IV iv) plain = do
         ctx <- lift2 CryptoError $ initAES256 key
-        iv <- lift2 CryptoError genIV
-        return $ cbcEncrypt ctx iv plain
+        return $ C.cbcEncrypt ctx iv (pad 32 plain)
 
     -- sym decryption with cryptocipher
-    symDecr key cipher = do
+    symDecr key (IV iv) cipher = do
         ctx <- lift2 CryptoError $ initAES256 key
-        iv <- lift2 CryptoError genIV
-        return $ cbcDecrypt ctx iv cipher
+        return . unpad $ C.cbcDecrypt ctx iv cipher
 
     genSessKey = lift2 CryptoError $ Right `fmap` genRand 32
+
+    genIV = return $ IV C.nullIV
 
 pad :: Word8 -> BS.ByteString -> BS.ByteString
 pad len bs = bs `BS.append` (BS.replicate (fromIntegral padLen) padLen)
@@ -58,11 +57,7 @@ unpad bs | BS.null bs = BS.empty
 genRand :: Int -> IO BS.ByteString
 genRand n = BS.pack `fmap` replicateM n randomIO
 
-genIV :: IO (Either String (IV AES256))
-genIV = (maybe (Left "invalid iv") Right . makeIV) `fmap` ivBS
-    where ivBS = genRand 16
-
-initAES256 :: BS.ByteString -> IO (Either String AES256)
-initAES256 key = return . showLeft $ cipherInit `fmap` makeKey key
+initAES256 :: BS.ByteString -> IO (Either String C.AES256)
+initAES256 key = return . showLeft $ C.cipherInit `fmap` C.makeKey key
   where showLeft (Left err) = Left (show err)
         showLeft (Right r)  = Right r

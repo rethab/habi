@@ -6,6 +6,7 @@ import Control.Monad.Trans.Except (ExceptT(..))
 import Control.Monad.Trans.Reader (ReaderT(..))
 import System.IO                  (Handle)
 
+import qualified Crypto.Cipher   as C
 import qualified Data.ByteString as BS
 
 -- fingerprint
@@ -16,6 +17,8 @@ type SessionKey = BS.ByteString
 type Plain = BS.ByteString
 
 type Encrypted = BS.ByteString
+
+newtype IV = IV (C.IV C.AES256)
 
 data Error =
       -- package 'exp' was expected, but 'act' was received
@@ -29,18 +32,22 @@ data Error =
 
       -- error from underlying crypto module
     | CryptoError { _cause :: String }
+
+      -- other generic error
+    | OtherError { _reason :: String }
     deriving (Show)
 
 class (Monad m) => CryptoMonad m where
     asymEncr   :: Fpr -> Plain -> ExceptT Error m Encrypted
     asymDecr   :: Encrypted -> ExceptT Error m Plain
-    symEnc     :: SessionKey -> Plain -> ExceptT Error m Encrypted
-    symDecr    :: SessionKey -> Encrypted -> ExceptT Error m Plain
+    symEnc     :: SessionKey -> IV -> Plain -> ExceptT Error m Encrypted
+    symDecr    :: SessionKey -> IV -> Encrypted -> ExceptT Error m Plain
     genSessKey :: ExceptT Error m SessionKey
+    genIV      :: ExceptT Error m IV
 
 class (Monad m) => HandleMonad m where
-    hmPut  :: Handle -> BS.ByteString -> ExceptT Error m ()
-    hmGet  :: Handle -> Int -> ExceptT Error m BS.ByteString
+    hmPut :: Handle -> BS.ByteString -> ExceptT Error m ()
+    hmGet :: Handle -> Int -> ExceptT Error m BS.ByteString
 
 data CryptoCtx = CryptoCtx {
       -- homedir of gpg

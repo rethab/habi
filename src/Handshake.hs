@@ -18,7 +18,7 @@ import Types
 
 instance HandleMonad (ReaderT CryptoCtx IO) where
     hmPut h bs = lift2 HandleException . try $ BS.hPut h bs
-    hmGet h n = lift2 HandleException . try $ BS.hGet h n
+    hmGet h n  = lift2 HandleException . try $ BS.hGet h n
 
 leecherHandshake :: (HandleMonad m, CryptoMonad m) =>
                      Fpr -> Handle -> ExceptT Error m SessionKey
@@ -70,7 +70,10 @@ leecherSessionKey sessKey seederFpr h = do
     hmPut h encSessKey
 
     -- receive ack
-    consumeHeader 'A' h
+    iv <- genIV
+    encAckPkg <- hmGet h 32
+    ackPkg <- symDecr sessKey iv encAckPkg
+    expect 'A' ackPkg
 
     return ()
 
@@ -104,10 +107,11 @@ seederAck h = do
     -- decrpyt session key
     sessKey <- asymDecr encSessKey
     
-    -- encrypt session key
-    encAckPkg <- symEnc sessKey (strictPut $ packetID 'A')
+    -- encrypt ack
+    iv <- genIV
+    encAckPkg <- symEnc sessKey iv (strictPut $ packetID 'A')
 
-    -- send session key
+    -- send ack
     hmPut h encAckPkg
 
     return sessKey
@@ -131,9 +135,13 @@ runGet g = mapEither . runGetOrFail g . LBS.fromStrict
           thrd (_,_,x) = x
 
 consumeHeader :: (HandleMonad m) => Char -> Handle -> ExceptT Error m ()
-consumeHeader c h = hmGet h 1 >>= runGetE getWord8 >>= expect
-    where expect w = when (c /= act) (throwE $ UnexpectedPackage c act)
-            where act = chr (fromIntegral w) 
+consumeHeader c h = hmGet h 1 >>= runGetE getWord8 >>= expect c . BS.singleton
+
+expect :: (HandleMonad m) => Char -> BS.ByteString -> ExceptT Error m ()
+expect c bs
+    | BS.null bs = throwE $ OtherError "expected something, got nothing"
+    | otherwise  = when (c /= act) (throwE $ UnexpectedPackage c act)
+                    where act = chr (fromIntegral $ BS.head bs) 
 
 consumeLen :: (HandleMonad m) => Handle -> ExceptT Error m Word16
 consumeLen h = runGetE getWord16be =<< hmGet h 2

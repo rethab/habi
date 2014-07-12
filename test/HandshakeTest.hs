@@ -19,7 +19,6 @@ import qualified Control.Monad.State as S (State, runState)
 import qualified Data.ByteString     as BS
 
 import Handshake
-import Crypto
 import Types
                       
 tests = [ testProperty "leecher_hello" leecher_hello
@@ -61,7 +60,7 @@ leecher_session_key sessKey = BS.length sessKey `between` (1,100) ==>
     in w == lPayload
         where skExchg = leecherSessionKey sessKey lFpr undefined
 
-              sPayload = toPayload 'A' Nothing
+              sPayload = mock_encr_sync $ toPayload 'A' Nothing
 
               lFpr = BS.pack [1,2,3,4,5]
               lPayload = toPayload 'K' (Just $ mock_encr_async sessKey)
@@ -76,7 +75,7 @@ seeder_ack sessKey = BS.length sessKey `between` (1,100) ==>
               lPayload = toPayload 'K' (Just $ mock_encr_async sessKey)
 
               -- seeder sends sym encrypted acknowledge
-              sPayload = mock_encr_sync (pad 32 $ singleton 'A')
+              sPayload = mock_encr_sync $ singleton 'A'
               singleton = BS.singleton . fromIntegral . ord
 
 unexpected_package :: IO ()
@@ -116,8 +115,8 @@ full_handshake_it = do
     Just _ <- takeMVar' 2000 sBarrier --wait
     _ <- forkIO $ runLeecher socketfile lSessHolder
 
-    Just sSessKey <- takeMVar' 10000 sSessHolder
-    Just lSessKey <- takeMVar' 10000 lSessHolder
+    Just sSessKey <- takeMVar' 3000 sSessHolder
+    Just lSessKey <- takeMVar' 3000 lSessHolder
 
     -- both end up with the same session key
     sSessKey @?= lSessKey
@@ -155,6 +154,9 @@ toPayload :: Char -> Maybe BS.ByteString -> BS.ByteString
 toPayload i mbc = (fromIntegral $ ord i) `BS.cons` contents mbc
     where contents Nothing = BS.empty
           contents (Just c) =
+            -- payload length has 16 bit, it is assumed here that
+            -- more than 8 bit will not be needed and therefore
+            -- the 0 is hardcoded.
             0 `BS.cons` (fromIntegral $ BS.length c) `BS.cons` c
 
 runAll :: ExceptT Error (S.State MockState) a

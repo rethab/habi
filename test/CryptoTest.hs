@@ -1,17 +1,26 @@
 module CryptoTest (tests) where
 
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Except
 import Data.Word (Word8)
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
+import Test.QuickCheck.Monadic
 import TestUtil ()
 
 import qualified Data.ByteString     as BS
 
 import Crypto
+import Types
                       
-tests = [ testProperty "pad_unpad_reverse" pad_unpad_reverse 
+tests = [
+          -- padding
+          testProperty "pad_unpad_reverse" pad_unpad_reverse 
         , testProperty "padded_lenght_mod_len" padded_lenght_mod_len
         , testProperty "padded_lenght_longer" padded_lenght_longer
+
+          -- symmetric encryption
+        , testProperty "sym_encr_inverse" sym_encr_inverse
         ]
 
 pad_guard :: Word8 -> BS.ByteString -> Bool
@@ -35,3 +44,13 @@ padded_lenght_longer :: Word8 -> BS.ByteString -> Property
 padded_lenght_longer len bytes = pad_guard len bytes ==>
     pad_len > BS.length bytes
   where pad_len = fromIntegral (BS.length $ pad len bytes)
+
+sym_encr_inverse :: BS.ByteString -> Property
+sym_encr_inverse bs = monadicIO go
+    where go = do Right r <- run $ runReaderT (runExceptT act) (CryptoCtx "")
+                  assert $ r == bs
+
+          act = do iv <- genIV
+                   sessKey <- genSessKey
+                   enc <- symEnc sessKey iv bs
+                   symDecr sessKey iv enc
