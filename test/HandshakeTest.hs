@@ -137,7 +137,7 @@ full_handshake_it = do
           sock <- socket AF_UNIX Stream 0
           connect sock $ SockAddrUnix socketfile
           h <- socketToHandle sock ReadWriteMode
-          sessKey <- runWithCtx "../h-gpgme/test/alice" $ leecherHandshake bob_pub_fpr h
+          sessKey <- runWithCtx "../h-gpgme/test/alice" $ leecherHandshake alice_pub_fpr h
           putMVar sessHolder sessKey
           hClose h
 
