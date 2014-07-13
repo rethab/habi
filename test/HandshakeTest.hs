@@ -18,8 +18,8 @@ import TestUtil
 import qualified Control.Monad.State as S (State, runState)
 import qualified Data.ByteString     as BS
 
-import Handshake
-import Types
+import Habi.Handshake
+import Habi.Types
                       
 tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_hello" seeder_hello

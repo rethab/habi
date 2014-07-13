@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
-module Handshake where
+module Habi.Handshake where
 
 import Control.Exception          (try)
 import Control.Monad              (when)
@@ -14,7 +14,7 @@ import System.IO                  (Handle)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 
-import Types
+import Habi.Types
 
 instance HandleMonad (ReaderT CryptoCtx IO) where
     hmPut h bs = lift2 HandleException . try $ BS.hPut h bs

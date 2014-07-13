@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
-module Crypto where
+module Habi.Crypto where
 
 import Control.Monad              (replicateM)
 import Control.Monad.Trans        (lift)
@@ -11,7 +11,7 @@ import System.Random              (randomIO)
 import qualified Crypto.Cipher   as C
 import qualified Data.ByteString as BS
 
-import Types
+import Habi.Types
 
 instance CryptoMonad (ReaderT CryptoCtx IO) where
 

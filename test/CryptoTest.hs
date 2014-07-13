@@ -10,8 +10,8 @@ import TestUtil ()
 
 import qualified Data.ByteString     as BS
 
-import Crypto
-import Types
+import Habi.Crypto
+import Habi.Types
                       
 tests = [
           -- padding

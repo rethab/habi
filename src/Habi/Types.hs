@@ -1,4 +1,4 @@
-module Types where
+module Habi.Types where
 
 import Control.Exception          (SomeException)
 import Control.Monad.Trans        (lift)

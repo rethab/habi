@@ -8,8 +8,8 @@ import Control.Monad.Trans.State (State, state, modify)
 import Data.Word (Word8)
 import Test.QuickCheck
 
-import Crypto
-import Types
+import Habi.Crypto
+import Habi.Types
 
 import qualified Crypto.Cipher  as C
 import qualified Data.ByteString as BS
