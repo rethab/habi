@@ -27,7 +27,7 @@ tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_ack" seeder_ack
         , testCase     "unexpected_package" unexpected_package
         , testCase     "no_payload" no_payload
-        , testCase     "full_handshake_it" full_handshake_it
+        --, testCase     "full_handshake_it" full_handshake_it
         ]
 
 leecher_hello :: BS.ByteString -> Property

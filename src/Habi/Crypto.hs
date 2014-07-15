@@ -26,18 +26,33 @@ instance CryptoMonad (ReaderT CryptoCtx IO) where
         lift2 (CryptoError . show) $ decryptVerify' (gpgDir ctx) cipher
 
     -- sym encryption with cryptocipher
-    symEnc key (IV iv) plain = do
-        ctx <- lift2 CryptoError $ initAES256 key
-        return $ C.cbcEncrypt ctx iv (pad 32 plain)
+    symEnc key iv plain = lift2 CryptoError $ symmetricEncrypt key iv plain
 
     -- sym decryption with cryptocipher
-    symDecr key (IV iv) cipher = do
-        ctx <- lift2 CryptoError $ initAES256 key
-        return . unpad $ C.cbcDecrypt ctx iv cipher
+    symDecr key iv cipher = lift2 CryptoError $ symmetricDecrypt key iv cipher
 
-    genSessKey = lift2 CryptoError $ Right `fmap` genRand 32
+    genSessKey = lift2 CryptoError $ Right `fmap` randomSessionKey
 
-    genIV = return $ IV C.nullIV
+    genIV = return newIV
+
+symmetricEncrypt :: SessionKey -> IV -> Plain -> IO (Either String Encrypted)
+symmetricEncrypt key (IV iv) plain = do
+    ectx <- initAES256 key
+    return $ ectx >>= \ctx -> Right $ C.cbcEncrypt ctx iv (pad 32 plain)
+
+symmetricDecrypt :: SessionKey -> IV -> Encrypted -> IO (Either String Plain)
+symmetricDecrypt key (IV iv) cipher = do
+    ectx <- initAES256 key
+    return $ ectx >>= \ctx -> Right (unpad $ C.cbcDecrypt ctx iv cipher)
+
+randomSessionKey :: IO SessionKey
+randomSessionKey = BS.pack `fmap` replicateM 32 randomIO
+
+newIV :: IV
+newIV = IV C.nullIV
+
+incrementIV :: IV -> IV
+incrementIV (IV iv) = IV (C.ivAdd iv 1)
 
 pad :: Word8 -> BS.ByteString -> BS.ByteString
 pad len bs = bs `BS.append` (BS.replicate (fromIntegral padLen) padLen)
@@ -53,9 +68,6 @@ unpad :: BS.ByteString -> BS.ByteString
 unpad bs | BS.null bs = BS.empty
          | otherwise  = fst $ BS.splitAt idxRight bs
     where idxRight = BS.length bs - (fromIntegral $ BS.last bs)
-
-genRand :: Int -> IO BS.ByteString
-genRand n = BS.pack `fmap` replicateM n randomIO
 
 initAES256 :: BS.ByteString -> IO (Either String C.AES256)
 initAES256 key = return . showLeft $ C.cipherInit `fmap` C.makeKey key

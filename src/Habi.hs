@@ -1,6 +1,24 @@
 module Habi (
+
+    -- * Handshake
       leecherHandshake
     , seederHandshake
+
+    -- * Symmetric Encryption
+    , Crypto.symmetricDecrypt
+    , Crypto.symmetricEncrypt
+
+    -- * Initialization Vector
+    , Crypto.incrementIV
+    , Crypto.newIV
+    , Crypto.randomSessionKey
+
+    -- * Types
+    , Encrypted
+    , Plain
+    , SessionKey
+    , IV
+
 ) where
 
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
@@ -9,8 +27,8 @@ import Network.Socket             (Socket, socketToHandle)
 import System.IO                  (Handle, IOMode(ReadWriteMode))
 
 import qualified Habi.Handshake as Intern
+import qualified Habi.Crypto as Crypto
 import Habi.Types
-import Habi.Crypto ()
 
 -- | path pointing to the gpg homedir
 type GpgHomedir = String

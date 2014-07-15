@@ -21,6 +21,7 @@ tests = [
 
           -- symmetric encryption
         , testProperty "sym_encr_inverse" sym_encr_inverse
+        , testProperty "sym_encr_inverse_iv_add" sym_encr_inverse_iv_add
         ]
 
 pad_guard :: Word8 -> BS.ByteString -> Bool
@@ -47,10 +48,19 @@ padded_lenght_longer len bytes = pad_guard len bytes ==>
 
 sym_encr_inverse :: BS.ByteString -> Property
 sym_encr_inverse bs = monadicIO go
-    where go = do Right r <- run $ runReaderT (runExceptT act) (CryptoCtx "")
+    where go = do Right r <- run act
                   assert $ r == bs
 
-          act = do iv <- genIV
-                   sessKey <- genSessKey
-                   enc <- symEnc sessKey iv bs
-                   symDecr sessKey iv enc
+          act = do sessKey <- randomSessionKey
+                   Right enc <- symmetricEncrypt sessKey newIV bs
+                   symmetricDecrypt sessKey newIV enc
+
+sym_encr_inverse_iv_add :: Word8 -> BS.ByteString -> Property
+sym_encr_inverse_iv_add n bs = monadicIO go
+    where go = do Right r <- run act
+                  assert $ r == bs
+
+          act = do sessKey <- randomSessionKey
+                   let iv = iterate incrementIV newIV !! (fromIntegral n)
+                   Right enc <- symmetricEncrypt sessKey iv bs
+                   symmetricDecrypt sessKey iv enc
