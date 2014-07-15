@@ -13,12 +13,6 @@ module Habi (
     , Crypto.newIV
     , Crypto.randomSessionKey
 
-    -- * Types
-    , Encrypted
-    , Plain
-    , SessionKey
-    , IV
-
 ) where
 
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
