@@ -9,100 +9,101 @@ import Data.Binary.Put            (Put, putWord8, putWord16be, runPut)
 import Data.Binary.Get            (Get, getWord8, getWord16be, runGetOrFail)
 import Data.Char                  (chr, ord)
 import Data.Word                  (Word16)
-import System.IO                  (Handle)
+import Network.Socket             (Socket)
+import Network.Socket.ByteString  (recv, sendAll)
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 
 import Habi.Types
 
-instance HandleMonad (ReaderT CryptoCtx IO) where
-    hmPut h bs = lift2 HandleException . try $ BS.hPut h bs
-    hmGet h n  = lift2 HandleException . try $ BS.hGet h n
+instance SocketMonad (ReaderT CryptoCtx IO) where
+    smPut s bs = lift2 SocketException . try $ sendAll s bs
+    smGet s n  = lift2 SocketException . try $ recv s n
 
-leecherHandshake :: (HandleMonad m, CryptoMonad m) =>
-                     Fpr -> Handle -> ExceptT Error m SessionKey
-leecherHandshake lFpr h = do
+leecherHandshake :: (SocketMonad m, CryptoMonad m) =>
+                     Fpr -> Socket -> ExceptT Error m SessionKey
+leecherHandshake lFpr s = do
 
     -- send fingerprint and get fingerprint
-    sFpr <- leecherHello lFpr h
+    sFpr <- leecherHello lFpr s
 
     -- generate and send session key
     sessKey <- genSessKey
-    leecherSessionKey sessKey sFpr h
+    leecherSessionKey sessKey sFpr s
 
     return sessKey
 
-seederHandshake :: (HandleMonad m, CryptoMonad m) =>
-                    Fpr -> Handle -> ExceptT Error m SessionKey
-seederHandshake sFpr h = do
+seederHandshake :: (SocketMonad m, CryptoMonad m) =>
+                    Fpr -> Socket -> ExceptT Error m SessionKey
+seederHandshake sFpr s = do
 
     -- send fingerprint and get fingerprint
-    _ <- seederHello sFpr h
+    _ <- seederHello sFpr s
 
     -- get session key and acknowledge
-    seederAck h
+    seederAck s
 
-leecherHello :: (HandleMonad m) => Fpr -> Handle -> ExceptT Error m Fpr
-leecherHello myFpr h = do
+leecherHello :: (SocketMonad m) => Fpr -> Socket -> ExceptT Error m Fpr
+leecherHello myFpr s = do
     
     -- send fingerprint
-    hmPut h (strictPut $ packetID 'L' >> w16beLen myFpr)
-    hmPut h myFpr
+    smPut s (strictPut $ packetID 'L' >> w16beLen myFpr)
+    smPut s myFpr
 
     -- receive fingerprint
-    consumeHeader 'S' h
-    sFprLen <- consumeLen h
-    hmGet h (fromIntegral sFprLen)
+    consumeHeader 'S' s
+    sFprLen <- consumeLen s
+    smGet s (fromIntegral sFprLen)
 
-leecherSessionKey :: (CryptoMonad m, HandleMonad m) =>
+leecherSessionKey :: (CryptoMonad m, SocketMonad m) =>
                       SessionKey
                    -> Fpr
-                   -> Handle
+                   -> Socket
                    -> ExceptT Error m ()
-leecherSessionKey sessKey seederFpr h = do
+leecherSessionKey sessKey seederFpr s = do
     
     -- encrypt session key
     encSessKey <- asymEncr seederFpr sessKey
 
     -- send session key
-    hmPut h (strictPut $ (packetID 'K') >> w16beLen encSessKey)
-    hmPut h encSessKey
+    smPut s (strictPut $ (packetID 'K') >> w16beLen encSessKey)
+    smPut s encSessKey
 
     -- receive ack
     iv <- genIV
-    encAckPkg <- hmGet h 32
+    encAckPkg <- smGet s 32
     ackPkg <- symDecr sessKey iv encAckPkg
     expect 'A' ackPkg
 
     return ()
 
-seederHello :: (HandleMonad m) =>
+seederHello :: (SocketMonad m) =>
                 Fpr
-             -> Handle
+             -> Socket
              -> ExceptT Error m Fpr
-seederHello myFpr h = do
+seederHello myFpr s = do
     
     -- receive fingerprint
-    consumeHeader 'L' h
-    lFprLen <- consumeLen h
-    lFpr <- hmGet h (fromIntegral lFprLen)
+    consumeHeader 'L' s
+    lFprLen <- consumeLen s
+    lFpr <- smGet s (fromIntegral lFprLen)
 
     -- send fingerprint
-    hmPut h (strictPut $ packetID 'S' >> w16beLen myFpr)
-    hmPut h myFpr
+    smPut s (strictPut $ packetID 'S' >> w16beLen myFpr)
+    smPut s myFpr
 
     return lFpr
 
-seederAck :: (CryptoMonad m, HandleMonad m) =>
-              Handle
+seederAck :: (CryptoMonad m, SocketMonad m) =>
+              Socket
            -> ExceptT Error m SessionKey
-seederAck h = do
+seederAck s = do
 
     -- receive session key
-    consumeHeader 'K' h
-    sessKeyLen <- consumeLen h
-    encSessKey <- hmGet h (fromIntegral sessKeyLen)
+    consumeHeader 'K' s
+    sessKeyLen <- consumeLen s
+    encSessKey <- smGet s (fromIntegral sessKeyLen)
 
     -- decrpyt session key
     sessKey <- asymDecr encSessKey
@@ -112,7 +113,7 @@ seederAck h = do
     encAckPkg <- symEnc sessKey iv (strictPut $ packetID 'A')
 
     -- send ack
-    hmPut h encAckPkg
+    smPut s encAckPkg
 
     return sessKey
 
@@ -134,14 +135,14 @@ runGet g = mapEither . runGetOrFail g . LBS.fromStrict
           mapEither (Right r) = Right (thrd r)
           thrd (_,_,x) = x
 
-consumeHeader :: (HandleMonad m) => Char -> Handle -> ExceptT Error m ()
-consumeHeader c h = hmGet h 1 >>= runGetE getWord8 >>= expect c . BS.singleton
+consumeHeader :: (SocketMonad m) => Char -> Socket -> ExceptT Error m ()
+consumeHeader c s = smGet s 1 >>= runGetE getWord8 >>= expect c . BS.singleton
 
-expect :: (HandleMonad m) => Char -> BS.ByteString -> ExceptT Error m ()
+expect :: (SocketMonad m) => Char -> BS.ByteString -> ExceptT Error m ()
 expect c bs
     | BS.null bs = throwE $ OtherError "expected something, got nothing"
     | otherwise  = when (c /= act) (throwE $ UnexpectedPackage c act)
                     where act = chr (fromIntegral $ BS.head bs) 
 
-consumeLen :: (HandleMonad m) => Handle -> ExceptT Error m Word16
-consumeLen h = runGetE getWord16be =<< hmGet h 2
+consumeLen :: (SocketMonad m) => Socket -> ExceptT Error m Word16
+consumeLen s = runGetE getWord16be =<< smGet s 2

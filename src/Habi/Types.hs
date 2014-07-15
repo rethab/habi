@@ -4,7 +4,7 @@ import Control.Exception          (SomeException)
 import Control.Monad.Trans        (lift)
 import Control.Monad.Trans.Except (ExceptT(..))
 import Control.Monad.Trans.Reader (ReaderT(..))
-import System.IO                  (Handle)
+import Network.Socket             (Socket)
 
 import qualified Crypto.Cipher   as C
 import qualified Data.ByteString as BS
@@ -24,8 +24,8 @@ data Error =
       -- package 'exp' was expected, but 'act' was received
       UnexpectedPackage { _exp :: Char, _act :: Char }
 
-      -- exception from operation on handle
-    | HandleException { _exc :: SomeException }
+      -- exception from operation on socket
+    | SocketException { _exc :: SomeException }
 
       -- error while decoding binary
     | DecodeError { _msg :: String }
@@ -45,9 +45,9 @@ class (Monad m) => CryptoMonad m where
     genSessKey :: ExceptT Error m SessionKey
     genIV      :: ExceptT Error m IV
 
-class (Monad m) => HandleMonad m where
-    hmPut :: Handle -> BS.ByteString -> ExceptT Error m ()
-    hmGet :: Handle -> Int -> ExceptT Error m BS.ByteString
+class (Monad m) => SocketMonad m where
+    smPut :: Socket -> BS.ByteString -> ExceptT Error m ()
+    smGet :: Socket -> Int -> ExceptT Error m BS.ByteString
 
 data CryptoCtx = CryptoCtx {
       -- homedir of gpg

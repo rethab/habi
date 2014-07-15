@@ -39,12 +39,12 @@ data MockState = MockState {
 newMock :: BS.ByteString -> MockState
 newMock bs = MockState bs BS.empty
 
-instance HandleMonad (State MockState) where
+instance SocketMonad (State MockState) where
 
-    hmPut _ bs = lift . modify $ \(MockState r w) ->
+    smPut _ bs = lift . modify $ \(MockState r w) ->
         MockState r (w `BS.append` bs)
 
-    hmGet _ n = lift . state $ \(MockState r w) ->
+    smGet _ n = lift . state $ \(MockState r w) ->
         let (h, t) = BS.splitAt n r
         in (h, MockState t w)
 

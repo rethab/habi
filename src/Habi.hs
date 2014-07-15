@@ -17,8 +17,7 @@ module Habi (
 
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
-import Network.Socket             (Socket, socketToHandle)
-import System.IO                  (Handle, IOMode(ReadWriteMode))
+import Network.Socket             (Socket)
 
 import qualified Habi.Handshake as Intern
 import qualified Habi.Crypto as Crypto
@@ -28,14 +27,10 @@ import Habi.Types
 type GpgHomedir = String
 
 leecherHandshake :: Socket -> GpgHomedir -> Fpr -> IO (Either Error SessionKey)
-leecherHandshake s hd fpr = s2h s >>= \h -> run hd $ Intern.leecherHandshake fpr h
+leecherHandshake s hd fpr = run hd $ Intern.leecherHandshake fpr s
 
 seederHandshake :: Socket -> GpgHomedir -> Fpr -> IO (Either Error SessionKey)
-seederHandshake s hd fpr = s2h s >>= \h -> run hd $ Intern.seederHandshake fpr h
-
-s2h :: Socket -> IO Handle
-s2h s = socketToHandle s ReadWriteMode
-
+seederHandshake s hd fpr = run hd $ Intern.seederHandshake fpr s
 
 run :: GpgHomedir -> (ExceptT Error (ReaderT CryptoCtx IO) SessionKey)
         -> IO (Either Error SessionKey)

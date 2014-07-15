@@ -7,7 +7,6 @@ import Data.Char (ord)
 import Network.Socket
 import System.Directory
 import System.FilePath
-import System.IO
 import System.Random
 import Test.Framework.Providers.HUnit
 import Test.Framework.Providers.QuickCheck2
@@ -27,7 +26,7 @@ tests = [ testProperty "leecher_hello" leecher_hello
         , testProperty "seeder_ack" seeder_ack
         , testCase     "unexpected_package" unexpected_package
         , testCase     "no_payload" no_payload
-        --, testCase     "full_handshake_it" full_handshake_it
+        , testCase     "full_handshake_it" full_handshake_it
         ]
 
 leecher_hello :: BS.ByteString -> Property
@@ -127,19 +126,17 @@ full_handshake_it = do
           listen sock 1
           putMVar barrier True
           (conn, _) <- accept sock
-          h <- socketToHandle conn ReadWriteMode
-          sessKey <- runWithCtx "../h-gpgme/test/bob" $ seederHandshake bob_pub_fpr h
+          sessKey <- runWithCtx "../h-gpgme/test/bob" $ seederHandshake bob_pub_fpr conn
           putMVar sessHolder sessKey
           sClose sock
-          hClose h
+          sClose conn
 
         runLeecher socketfile sessHolder = do
           sock <- socket AF_UNIX Stream 0
           connect sock $ SockAddrUnix socketfile
-          h <- socketToHandle sock ReadWriteMode
-          sessKey <- runWithCtx "../h-gpgme/test/alice" $ leecherHandshake alice_pub_fpr h
+          sessKey <- runWithCtx "../h-gpgme/test/alice" $ leecherHandshake alice_pub_fpr sock
           putMVar sessHolder sessKey
-          hClose h
+          sClose sock
 
         runWithCtx homedir act = do
           eres <- runReaderT (runExceptT act) (CryptoCtx homedir)
