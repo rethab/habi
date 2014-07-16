@@ -11,7 +11,13 @@ module Habi (
     -- * Initialization Vector
     , Crypto.incrementIV
     , Crypto.newIV
+
+    -- * Session Key
     , Crypto.randomSessionKey
+
+    -- * Types
+    , IV
+    , Error
 
 ) where
 
