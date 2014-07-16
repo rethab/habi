@@ -67,7 +67,7 @@ leecherSessionKey sessKey seederFpr s = do
     encSessKey <- asymEncr seederFpr sessKey
 
     -- send session key
-    smPut s (strictPut $ (packetID 'K') >> w16beLen encSessKey)
+    smPut s (strictPut $ packetID 'K' >> w16beLen encSessKey)
     smPut s encSessKey
 
     -- receive ack

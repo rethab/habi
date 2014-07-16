@@ -55,7 +55,7 @@ incrementIV :: IV -> IV
 incrementIV (IV iv) = IV (C.ivAdd iv 1)
 
 pad :: Word8 -> BS.ByteString -> BS.ByteString
-pad len bs = bs `BS.append` (BS.replicate (fromIntegral padLen) padLen)
+pad len bs = bs `BS.append` BS.replicate (fromIntegral padLen) padLen
     where -- number of bytes to be appended
           padLen :: Word8
           padLen = let padLen' = len - overlaps
@@ -67,7 +67,7 @@ pad len bs = bs `BS.append` (BS.replicate (fromIntegral padLen) padLen)
 unpad :: BS.ByteString -> BS.ByteString
 unpad bs | BS.null bs = BS.empty
          | otherwise  = fst $ BS.splitAt idxRight bs
-    where idxRight = BS.length bs - (fromIntegral $ BS.last bs)
+    where idxRight = BS.length bs - fromIntegral (BS.last bs)
 
 initAES256 :: BS.ByteString -> IO (Either String C.AES256)
 initAES256 key = return . showLeft $ C.cipherInit `fmap` C.makeKey key

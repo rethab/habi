@@ -32,6 +32,6 @@ leecherHandshake s hd fpr = run hd $ Intern.leecherHandshake fpr s
 seederHandshake :: Socket -> GpgHomedir -> Fpr -> IO (Either Error SessionKey)
 seederHandshake s hd fpr = run hd $ Intern.seederHandshake fpr s
 
-run :: GpgHomedir -> (ExceptT Error (ReaderT CryptoCtx IO) SessionKey)
+run :: GpgHomedir -> ExceptT Error (ReaderT CryptoCtx IO) SessionKey
         -> IO (Either Error SessionKey)
 run homedir act = runReaderT (runExceptT act) (CryptoCtx homedir)
