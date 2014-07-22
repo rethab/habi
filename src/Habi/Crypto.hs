@@ -3,6 +3,7 @@ module Habi.Crypto where
 
 import Control.Monad              (replicateM)
 import Control.Monad.Trans        (lift)
+import Control.Monad.Trans.Except (ExceptT(..))
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Crypto.Gpgme               (encryptSign', decryptVerify')
 import Data.Word                  (Word8)
@@ -31,7 +32,7 @@ instance CryptoMonad (ReaderT CryptoCtx IO) where
     -- sym decryption with cryptocipher
     symDecr key iv cipher = lift2 CryptoError $ symmetricDecrypt key iv cipher
 
-    genSessKey = lift2 CryptoError $ Right `fmap` randomSessionKey
+    genSessKey = ExceptT . lift $ Right `fmap` randomSessionKey
 
     genIV = return newIV
 
