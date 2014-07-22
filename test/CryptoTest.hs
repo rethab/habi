@@ -4,7 +4,9 @@ import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Except
 import Data.Word (Word8)
 import Test.Framework.Providers.QuickCheck2
+import Test.Framework.Providers.HUnit
 import Test.QuickCheck
+import Test.HUnit hiding (assert)
 import Test.QuickCheck.Monadic
 import TestUtil ()
 
@@ -18,6 +20,7 @@ tests = [
           testProperty "pad_unpad_reverse" pad_unpad_reverse 
         , testProperty "padded_lenght_mod_len" padded_lenght_mod_len
         , testProperty "padded_lenght_longer" padded_lenght_longer
+        , testCase     "unpad_empty" unpad_empty
 
           -- symmetric encryption
         , testProperty "sym_encr_inverse" sym_encr_inverse
@@ -45,6 +48,10 @@ padded_lenght_longer :: Word8 -> BS.ByteString -> Property
 padded_lenght_longer len bytes = pad_guard len bytes ==>
     pad_len > BS.length bytes
   where pad_len = fromIntegral (BS.length $ pad len bytes)
+
+unpad_empty :: Assertion
+unpad_empty =
+    assertEqual "fault tolerance" BS.empty (unpad BS.empty)
 
 sym_encr_inverse :: BS.ByteString -> Property
 sym_encr_inverse bs = monadicIO go
