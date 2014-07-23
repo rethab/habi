@@ -59,8 +59,7 @@ pad :: Word8 -> BS.ByteString -> BS.ByteString
 pad len bs = bs `BS.append` BS.replicate (fromIntegral padLen) padLen
     where -- number of bytes to be appended
           padLen :: Word8
-          padLen = let padLen' = len - overlaps
-                   in if padLen' == 0 then len else padLen'
+          padLen = len - overlaps
 
           -- bytes in next block
           overlaps = fromIntegral (BS.length bs `mod` fromIntegral len)

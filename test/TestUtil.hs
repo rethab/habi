@@ -72,3 +72,20 @@ safeSucc n | n < 255   = succ n
 safePred :: Word8 -> Word8
 safePred n | n > 0     = pred n
            | otherwise = 255
+
+isLeft :: Either e a -> Bool
+isLeft (Left _) = True
+isLeft _        = False
+
+fromLeft :: Either e a -> e
+fromLeft (Left e) = e
+fromLeft _        = error "is not left"
+
+-- fuzzy equals that compares value constructor
+(~=~) :: Error -> Error -> Bool
+(~=~) (UnexpectedPackage _ _ ) (UnexpectedPackage _ _) = True
+(~=~) (SocketException _ ) (SocketException _)         = True
+(~=~) (DecodeError _) (DecodeError _)                  = True
+(~=~) (CryptoError _) (CryptoError _)                  = True
+(~=~) (OtherError _) (OtherError _)                    = True
+(~=~) _ _                                              = False
