@@ -27,6 +27,7 @@ tests = [ testProperty "leecher_hello" leecher_hello
         , testCase     "unexpected_package" unexpected_package
         , testCase     "no_payload" no_payload
         , testCase     "full_handshake_it" full_handshake_it
+        , testCase     "expect_but_empty" expect_but_empty
         ]
 
 leecher_hello :: BS.ByteString -> Property
@@ -77,7 +78,7 @@ seeder_ack sessKey = BS.length sessKey `between` (1,100) ==>
               sPayload = mock_encr_sync $ singleton 'A'
               singleton = BS.singleton . fromIntegral . ord
 
-unexpected_package :: IO ()
+unexpected_package :: Assertion
 unexpected_package =
     let (Left (UnexpectedPackage ex ac), MockState _ _) =
                 runAll skExchg (newMock lPayload)
@@ -87,7 +88,7 @@ unexpected_package =
 
               lPayload = toPayload 'U' Nothing
 
-no_payload :: IO ()
+no_payload :: Assertion
 no_payload =
     let (Left (DecodeError msg), MockState _ _) =
                 runAll skExchg (newMock lPayload)
@@ -96,7 +97,16 @@ no_payload =
 
               lPayload = BS.empty
 
-full_handshake_it :: IO ()
+expect_but_empty :: Assertion
+expect_but_empty =
+    do res <- runReaderT (runExceptT (expect 'A' BS.empty))
+                         (undefined :: CryptoCtx)
+       assertBool "should be left" (isLeft res)
+       let err = fromLeft res
+       let expected = OtherError undefined
+       assertBool "should be other error" (expected ~=~ err)
+
+full_handshake_it :: Assertion
 full_handshake_it = do
     filename <- randomString 20
     socketfile <- fmap (</> filename) getTemporaryDirectory
@@ -126,7 +136,8 @@ full_handshake_it = do
           listen sock 1
           putMVar barrier True
           (conn, _) <- accept sock
-          sessKey <- runWithCtx "../h-gpgme/test/bob" $ seederHandshake bob_pub_fpr conn
+          sessKey <- runWithCtx "../h-gpgme/test/bob" $
+            seederHandshake bob_pub_fpr conn
           putMVar sessHolder sessKey
           sClose sock
           sClose conn
@@ -134,7 +145,8 @@ full_handshake_it = do
         runLeecher socketfile sessHolder = do
           sock <- socket AF_UNIX Stream 0
           connect sock $ SockAddrUnix socketfile
-          sessKey <- runWithCtx "../h-gpgme/test/alice" $ leecherHandshake alice_pub_fpr sock
+          sessKey <- runWithCtx "../h-gpgme/test/alice" $
+            leecherHandshake alice_pub_fpr sock
           putMVar sessHolder sessKey
           sClose sock
 
